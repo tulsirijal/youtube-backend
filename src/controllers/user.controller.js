@@ -50,7 +50,88 @@ const registerUser = async(req,res)=>{
         })
     }
 }
+const login = async(req,res)=>{
+    try {
+        // get the user info from req.body
+        // check if all fields are filled
+        // check if the user already exists
+        // if exists, match the password
+        // generate access and refresh token
+        // create cookie 
+        // send response
+        const {email,password} = req.body
+
+        if(!email && !password){
+            return res.status(400).json({
+                success:"false",
+                message:"All fields are required"
+            })
+        }
+        const user = await User.findOne({email:email})
+        if(!user){
+            return res.status(400).json({
+                success:false,
+                message:"User doesn't exists"
+            })
+        }
+        const isPasswordCorrect = await user.checkPassword(password)
+        if(!isPasswordCorrect){
+            return res.status(401).json({
+                success:false,
+                message:"Incorrect password"
+            })
+        }
+
+        const accessToken = user.generateAccessToken()
+        const refreshToken = user.generateRefreshToken()
+        user.refreshToken = refreshToken
+        await user.save({validateBeforeSave:false})
+        const loggedInUser = await User.findById(user._id).select('-password -refreshToken')
+        const options = {
+            httpOnly:true,
+            secure:true
+        }
+
+        return res.status(200).cookie('accessToken',accessToken,options).cookie('refreshToken',refreshToken,options).json({
+            success:true,
+            message:"Successfully logged in",
+            accessToken,refreshToken,
+            user:loggedInUser
+        })
+
+    } catch (error) {
+        console.log("Error while registering the user:", error.message)
+       return res.status(500).json({
+            success:false,
+            message:"Internal server error"
+        })
+    }
+}
+
+const logout = async(req,res)=>{
+    try {
+        const user = req.user
+        const loggedInUser = await User.findById(user._id)
+        loggedInUser.refreshToken = undefined
+        await loggedInUser.save({validateBeforeSave:false})
+        const options = {
+            httpOnly:true,
+            secure:true
+        }
+        res.status(200).clearCookie('accessToken',options).clearCookie('refreshToken', options).json({
+            message:"Logged out",
+            success:true
+        })
+    } catch (error) {
+        console.log('Error while logging out', error.message)
+        return res.status(500).json({
+            success:false,
+            message:error.message
+        })
+    }
+}
+
 
 export {
-    registerUser
+    registerUser,login,logout
 }
